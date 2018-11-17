@@ -22,6 +22,10 @@
 
 // mxnet libraries
 mx_lib = 'lib/libmxnet.so, lib/libmxnet.a, 3rdparty/dmlc-core/libdmlc.a, 3rdparty/tvm/nnvm/lib/libnnvm.a'
+
+// Python wheels
+mx_pip = 'build/*.whl'
+
 // for scala build, need to pass extra libs when run with dist_kvstore
 mx_dist_lib = 'lib/libmxnet.so, lib/libmxnet.a, 3rdparty/dmlc-core/libdmlc.a, 3rdparty/tvm/nnvm/lib/libnnvm.a, 3rdparty/ps-lite/build/libps.a, deps/lib/libprotobuf-lite.a, deps/lib/libzmq.a'
 // mxnet cmake libraries, in cmake builds we do not produce a libnvvm static library by default.
@@ -89,6 +93,30 @@ def python3_gpu_ut_nocudnn(docker_container_name) {
   }
 }
 
+def deploy_docs() {
+  parallel 'Docs': {
+    node(NODE_LINUX_CPU) {
+      ws('workspace/docs') {
+        timeout(time: max_time, unit: 'MINUTES') {
+          utils.init_git()
+          utils.docker_run('ubuntu_cpu', 'deploy_docs', false)
+          sh "ci/other/ci_deploy_doc.sh ${env.BRANCH_NAME} ${env.BUILD_NUMBER}"
+        }
+      }
+    }
+  },
+  'Julia docs': {
+    node(NODE_LINUX_CPU) {
+      ws('workspace/julia-docs') {
+        timeout(time: max_time, unit: 'MINUTES') {
+          utils.unpack_and_init('cpu', mx_lib)
+          utils.docker_run('ubuntu_cpu', 'deploy_jl_docs', false)
+        }
+      }
+    }
+  }
+}
+
 node('mxnetlinux-cpu') {
   // Loading the utilities requires a node context unfortunately
   checkout scm
@@ -124,7 +152,7 @@ core_logic: {
           timeout(time: max_time, unit: 'MINUTES') {
             utils.init_git()
             utils.docker_run('centos7_cpu', 'build_centos7_cpu', false)
-            utils.pack_lib('centos7_cpu', mx_lib, true)
+            utils.pack_lib('centos7_cpu', mx_dist_lib, true)
           }
         }
       }
@@ -390,6 +418,7 @@ core_logic: {
           timeout(time: max_time, unit: 'MINUTES') {
             utils.init_git()
             utils.docker_run('armv7', 'build_armv7', false)
+            utils.pack_lib('armv7', mx_pip)
           }
         }
       }
@@ -669,6 +698,17 @@ core_logic: {
         }
       }
     },
+    'Scala: CentOS CPU': {
+      node(NODE_LINUX_CPU) {
+        ws('workspace/ut-scala-centos7-cpu') {
+          timeout(time: max_time, unit: 'MINUTES') {
+            utils.unpack_and_init('centos7_cpu', mx_dist_lib, true)
+            utils.docker_run('centos7_cpu', 'unittest_centos7_cpu_scala', false)
+            utils.publish_test_coverage()
+          }
+        }
+      }
+    },
     'Clojure: CPU': {
       node(NODE_LINUX_CPU) {
         ws('workspace/ut-clojure-cpu') {
@@ -742,6 +782,16 @@ core_logic: {
             utils.unpack_and_init('gpu', mx_lib, true)
             utils.docker_run('ubuntu_gpu', 'unittest_ubuntu_gpu_R', true)
             utils.publish_test_coverage()
+          }
+        }
+      }
+    },
+    'Julia 0.6: CPU': {
+      node(NODE_LINUX_CPU) {
+        ws('workspace/ut-julia06-cpu') {
+          timeout(time: max_time, unit: 'MINUTES') {
+            utils.unpack_and_init('cpu', mx_lib)
+            utils.docker_run('ubuntu_cpu', 'unittest_ubuntu_cpu_julia06', false)
           }
         }
       }
@@ -907,19 +957,21 @@ core_logic: {
           }
         }
       }
+    },
+    'ARMv7 QEMU': {
+      node(NODE_LINUX_CPU) {
+        ws('workspace/ut-armv7-qemu') {
+          timeout(time: max_time, unit: 'MINUTES') {
+            utils.unpack_and_init('armv7', mx_pip)
+            sh "ci/build.py --docker-registry ${env.DOCKER_CACHE_REGISTRY} -p test.arm_qemu ./runtime_functions.py run_ut_py3_qemu"
+          }
+        }
+      }
     }
   }
 
   stage('Deploy') {
-    node(NODE_LINUX_CPU) {
-      ws('workspace/docs') {
-        timeout(time: max_time, unit: 'MINUTES') {
-          utils.init_git()
-          utils.docker_run('ubuntu_cpu', 'deploy_docs', false)
-          sh "ci/other/ci_deploy_doc.sh ${env.BRANCH_NAME} ${env.BUILD_NUMBER}"
-        }
-      }
-    }
+    deploy_docs()
   }
 }
 ,

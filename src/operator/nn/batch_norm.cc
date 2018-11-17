@@ -363,7 +363,7 @@ static bool BatchNormType(const nnvm::NodeAttrs& attrs,
       dtype_param = mshadow::DataType<AccRealX>::kFlag; });
   std::vector<std::string> args{"data", "gamma", "beta", "mean", "var"};
   CHECK_LE(in_type->size(), args.size());
-  for (index_t i = 1; i < in_type->size(); ++i) {
+  for (size_t i = 1; i < in_type->size(); ++i) {
     if ((*in_type)[i] == -1) {
       (*in_type)[i] = dtype_param;
     } else {
@@ -567,10 +567,9 @@ axis to be the last item in the input shape.
 Both ``gamma`` and ``beta`` are learnable parameters. But if ``fix_gamma`` is true,
 then set ``gamma`` to 1 and its gradient to 0.
 
-Note::
-
-When fix_gamma is set to True, no sparse support is provided. If fix_gamma is set to False,
-the sparse tensors will fallback.
+.. Note::
+  When ``fix_gamma`` is set to True, no sparse support is provided. If ``fix_gamma is`` set to False,
+  the sparse tensors will fallback.
 
 )code" ADD_FILELINE)
 .set_num_inputs(5)
